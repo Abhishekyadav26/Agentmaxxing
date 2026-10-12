@@ -34,25 +34,79 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
-  const [creating, setCreating] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [connected, setConnected] = useState<string | null>(null);
+  const [connBalance, setConnBalance] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const loadWallet = () => fetch("/api/wallet").then((r) => r.json()).then(setWallet);
 
   useEffect(() => {
     fetch("/api/agent").then((r) => r.json()).then(setStatus);
-    loadWallet();
+    // The agent's server wallet is auto-created in the background so paid
+    // tools keep working. The user never sees a "Create wallet" button.
+    fetch("/api/wallet")
+      .then((r) => r.json())
+      .then(async (w) => {
+        if (!w.address) {
+          await fetch("/api/wallet", { method: "POST" });
+          loadWallet();
+        } else {
+          setWallet(w);
+        }
+      });
+    const eth = (window as any).ethereum;
+    const onAccounts = (accs: string[]) => {
+      setConnected(accs?.[0] ?? null);
+      if (!accs?.[0]) setConnBalance(null);
+    };
+    eth?.on?.("accountsChanged", onAccounts);
+    return () => eth?.removeListener?.("accountsChanged", onAccounts);
   }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, thinking]);
 
-  async function createWallet() {
-    setCreating(true);
-    await fetch("/api/wallet", { method: "POST" });
-    await loadWallet();
-    setCreating(false);
+  // Connect the USER's browser wallet (display only). The agent still signs
+  // paid API calls with its own server wallet in the background.
+  async function connectWallet() {
+    setConnecting(true);
+    try {
+      const eth = (window as any).ethereum;
+      if (!eth) throw new Error("No browser wallet found. Install MetaMask or Coinbase Wallet.");
+      const accounts: string[] = await eth.request({ method: "eth_requestAccounts" });
+      try {
+        await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: "0x14a34" }] });
+      } catch (switchErr: any) {
+        if (switchErr?.code === 4902) {
+          await eth.request({
+            method: "wallet_addEthereumChain",
+            params: [{
+              chainId: "0x14a34",
+              chainName: "Base Sepolia",
+              nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+              rpcUrls: ["https://sepolia.base.org"],
+              blockExplorerUrls: ["https://sepolia.basescan.org"],
+            }],
+          });
+        } else throw switchErr;
+      }
+      setConnected(accounts[0]);
+      const weiHex: string = await eth.request({
+        method: "eth_getBalance",
+        params: [accounts[0], "latest"],
+      });
+      setConnBalance(`${(parseInt(weiHex, 16) / 1e18).toFixed(4)} ETH`);
+    } catch {
+      setConnected(null);
+    }
+    setConnecting(false);
+  }
+
+  function disconnect() {
+    setConnected(null);
+    setConnBalance(null);
   }
 
   async function send(text: string) {
@@ -118,13 +172,30 @@ export default function Home() {
                 {ready && <p className="text-muted-foreground">Connected.</p>}
               </SetupStep>
 
-              <SetupStep number={2} title="Create the agent wallet" done={Boolean(wallet?.address)}>
-                {wallet && !wallet.address && (
+              <SetupStep number={2} title="Connect your wallet" done={Boolean(connected)}>
+                {!connected && (
                   <div className="flex flex-col gap-3">
-                    <p className="text-muted-foreground">The agent signs payments with this wallet to use paid APIs.</p>
-                    <Button onClick={createWallet} disabled={creating} className="w-fit font-mono tracking-wider uppercase">
-                      <Wallet /> {creating ? "Creating..." : "Create wallet"}
+                    <p className="text-muted-foreground">Connect your browser wallet to fund the agent on Base Sepolia.</p>
+                    <Button onClick={connectWallet} disabled={connecting} className="w-fit font-mono tracking-wider uppercase">
+                      <Wallet /> {connecting ? "Connecting..." : "Connect wallet"}
                     </Button>
+                  </div>
+                )}
+                {connected && (
+                  <div className="flex flex-col gap-3 border bg-background p-3">
+                    <code className="truncate font-mono text-xs text-primary">{connected}</code>
+                    <div className="flex items-center justify-between font-mono text-xs text-muted-foreground uppercase">
+                      <span>
+                        Balance <span className="text-foreground">{connBalance ?? "..."}</span>
+                      </span>
+                      <Button variant="ghost" size="icon-xs" onClick={disconnect} aria-label="Disconnect">
+                        Disconnect
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Base Sepolia (chain 84532). Agent signs paid APIs with its own server wallet
+                      {wallet?.address ? ` (${wallet.address.slice(0, 10)}...)` : ""} in the background.
+                    </p>
                   </div>
                 )}
                 {wallet?.address && <WalletDetails wallet={wallet} onRefresh={loadWallet} />}
@@ -179,8 +250,8 @@ export default function Home() {
                     <p className="mt-1 text-muted-foreground">
                       {!ready
                         ? "Add your Gemini API key to start."
-                        : wallet && !wallet.address
-                          ? "Tip: create a wallet first so the agent can pay for the weather API."
+                        : !connected
+                          ? "Tip: connect your wallet so you can fund the agent."
                           : "Pick an example to start."}
                     </p>
                   </div>
