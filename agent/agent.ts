@@ -14,7 +14,9 @@ const MAX_STEPS = 5;
 
 const SYSTEM_PROMPT =
   "You are a helpful agent with your own crypto wallet. Use your tools when they help. " +
-  "If a tool costs money, just use it: your wallet pays automatically. Keep answers short and friendly.";
+  "If a tool costs money, just use it: your wallet pays automatically. Keep answers short and friendly. " +
+  "Write in plain text only, no markdown formatting: no asterisks, no bold (**), no bullets (* or -), no headings (#). " +
+  "For country facts, write simple lines like: Capital: New Delhi. Region: South Asia.";
 
 export type ChatMessage = { role: "user" | "agent"; text: string };
 export type Step = { tool: string; args: unknown; result: unknown; error?: boolean };
