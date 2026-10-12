@@ -383,7 +383,7 @@ function WalletDetails({ wallet, onRefresh }: { wallet: WalletInfo; onRefresh: (
         </a>
       )}
       {fundError && <p className="font-mono text-xs text-destructive">{fundError}</p>}
-      <p className="text-xs text-muted-foreground">Base Sepolia testnet. Saved in .agent-wallet.json.</p>
+      <p className="text-xs text-muted-foreground">Base Sepolia testnet (chain 84532). Saved in .agent-wallet.json.</p>
     </div>
   );
 }

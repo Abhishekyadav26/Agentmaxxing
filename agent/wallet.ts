@@ -20,7 +20,7 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { baseSepolia } from "viem/chains";
 
 const WALLET_FILE = path.join(process.cwd(), ".agent-wallet.json");
-const chain = createPublicClient({ chain: baseSepolia, transport: http() });
+const chain = createPublicClient({ chain: baseSepolia, transport: http("https://sepolia.base.org") });
 
 export type Payment = { from: Address; to: Address; amount: string; asset: string; resource: string; nonce: string };
 
