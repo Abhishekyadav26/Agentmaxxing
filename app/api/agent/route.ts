@@ -1,5 +1,6 @@
 import { MODEL, runAgent } from "@/agent/agent";
 import { tools } from "@/agent/tools";
+import { createWallet } from "@/agent/wallet";
 
 // GET /api/agent -> setup status + the list of tools (shown on the page)
 export async function GET() {
@@ -18,6 +19,14 @@ export async function POST(req: Request) {
 
   const { messages } = await req.json();
   try {
+    // Ensure the agent wallet exists before any tool runs (idempotent).
+    // Fixes the race where chat fires before the page auto-created it,
+    // and serverless instances whose filesystem didn't persist it.
+    try {
+      createWallet();
+    } catch {
+      // requireAccount inside the tool will surface a clear error if needed.
+    }
     const result = await runAgent(messages, { baseUrl: new URL(req.url).origin });
     return Response.json(result);
   } catch (err) {

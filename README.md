@@ -209,7 +209,7 @@ To use a wallet you already have, set `WALLET_PRIVATE_KEY` in `.env` instead.
 | :--- | :--- |
 | The page says to add `GEMINI_API_KEY` | Add your key to `.env` and restart `npm run dev`. |
 | The agent never uses my new tool | Make the `description` more specific about when the tool should be used, then restart the server. |
-| The weather tool fails with "no wallet yet" | Click **Create wallet** in the Setup panel, then ask again. On Vercel, set `WALLET_PRIVATE_KEY` instead (files don't persist on serverless) and redeploy. |
+| The weather tool fails with "no wallet yet" | Reload the page (the agent wallet auto-creates on load and on every chat request). On Vercel, set `WALLET_PRIVATE_KEY` and redeploy so the address is stable. |
 | Port 3000 is already in use | Run `npm run dev -- -p 3001` and open that port instead. |
 | A model error appears in the chat | Check that your API key is valid, or set a different model in `GEMINI_MODEL`. `gemini-flash-latest` currently 503s — use `gemini-flash-lite-latest` or `gemini-3.8-flash` instead. |
 | `get_country_info` returns "not iterable" | `restcountries.com/v3.1` is deprecated. This repo already uses countriesnow + World Bank instead. |

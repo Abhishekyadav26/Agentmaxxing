@@ -24,23 +24,35 @@ const chain = createPublicClient({ chain: baseSepolia, transport: http("https://
 
 export type Payment = { from: Address; to: Address; amount: string; asset: string; resource: string; nonce: string };
 
-/** The wallet from .env or .agent-wallet.json, or null if none was created yet. */
+/** The wallet from .env, memory (serverless), or .agent-wallet.json — or null if none yet. */
+let memoryKey: Hex | null = null;
 function loadAccount() {
-  const key = process.env.WALLET_PRIVATE_KEY || (fs.existsSync(WALLET_FILE) && JSON.parse(fs.readFileSync(WALLET_FILE, "utf8")).privateKey);
+  let fileKey: string | null = null;
+  try {
+    if (fs.existsSync(WALLET_FILE)) fileKey = JSON.parse(fs.readFileSync(WALLET_FILE, "utf8")).privateKey;
+  } catch {
+    fileKey = null;
+  }
+  const key = process.env.WALLET_PRIVATE_KEY || memoryKey || fileKey;
   return key ? privateKeyToAccount(key as Hex) : null;
 }
 
 function requireAccount() {
   const account = loadAccount();
-  if (!account) throw new Error("The agent has no wallet yet. Ask the user to click 'Create wallet' first.");
+  if (!account) throw new Error("The agent wallet is not set up yet. Reload the page (it auto-creates) or set WALLET_PRIVATE_KEY on the server.");
   return account;
 }
 
-/** Make a brand new wallet and save it. */
+/** Ensure a wallet exists (idempotent) and save it. Safe on read-only serverless: keeps it in memory. */
 export function createWallet() {
   if (loadAccount()) return getWalletAddress();
   const privateKey = generatePrivateKey();
-  fs.writeFileSync(WALLET_FILE, JSON.stringify({ privateKey }, null, 2));
+  memoryKey = privateKey;
+  try {
+    fs.writeFileSync(WALLET_FILE, JSON.stringify({ privateKey }, null, 2));
+  } catch {
+    // Read-only filesystem (serverless): memoryKey keeps it for this instance.
+  }
   return privateKeyToAccount(privateKey).address;
 }
 
