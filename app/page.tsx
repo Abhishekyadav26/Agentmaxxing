@@ -7,8 +7,6 @@ import {
   ChevronRight,
   CircleAlert,
   Copy,
-  ExternalLink,
-  RefreshCw,
   RotateCcw,
   SendHorizontal,
   Wallet,
@@ -37,6 +35,9 @@ export default function Home() {
   const [connecting, setConnecting] = useState(false);
   const [connected, setConnected] = useState<string | null>(null);
   const [connBalance, setConnBalance] = useState<string | null>(null);
+  const [funding, setFunding] = useState(false);
+  const [txHash, setTxHash] = useState<string | null>(null);
+  const [fundError, setFundError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const loadWallet = () => fetch("/api/wallet").then((r) => r.json()).then(setWallet);
@@ -107,6 +108,22 @@ export default function Home() {
   function disconnect() {
     setConnected(null);
     setConnBalance(null);
+  }
+
+  // Send 0.001 ETH on Base Sepolia from the user's browser wallet to the agent.
+  async function fundAgent() {
+    if (!wallet?.address) return;
+    setFunding(true);
+    setFundError(null);
+    setTxHash(null);
+    try {
+      const hash = await sendFundTx(wallet.address);
+      setTxHash(hash);
+      setTimeout(loadWallet, 8000); // balance indexes after a few seconds
+    } catch (err) {
+      setFundError(err instanceof Error ? err.message : String(err));
+    }
+    setFunding(false);
   }
 
   async function send(text: string) {
@@ -198,9 +215,19 @@ export default function Home() {
                       <CopyButton text={connected} label="Copy your address" />
                     </div>
                     <p className="text-2xl font-bold tracking-tight">{connBalance ?? "…"}</p>
+                    {wallet?.address && (
+                      <Button size="sm" className="mt-1 w-fit font-mono text-xs uppercase" onClick={fundAgent} disabled={funding}>
+                        {funding ? "Funding…" : "Fund agent 0.001 ETH"}
+                      </Button>
+                    )}
+                    {txHash && (
+                      <a className="font-mono text-xs text-primary underline underline-offset-4" href={`https://sepolia.basescan.org/tx/${txHash}`} target="_blank" rel="noreferrer">
+                        Funded {shortAddr(txHash)} — view on explorer
+                      </a>
+                    )}
+                    {fundError && <p className="font-mono text-xs text-destructive">{fundError}</p>}
                   </div>
                 )}
-                {wallet?.address && <WalletDetails wallet={wallet} onRefresh={loadWallet} />}
               </SetupStep>
 
               <SetupStep number={3} title="Chat with your agent" done={messages.some((m) => m.role === "agent" && !m.error)} last>
@@ -387,101 +414,37 @@ function SetupStep(props: { number: number; title: string; done: boolean; last?:
   );
 }
 
-function WalletDetails({ wallet, onRefresh }: { wallet: WalletInfo; onRefresh: () => void }) {
-  const [funding, setFunding] = useState(false);
-  const [txHash, setTxHash] = useState<string | null>(null);
-  const [fundError, setFundError] = useState<string | null>(null);
-  const address = wallet.address!;
-
-  // Fund the agent from the USER's own browser wallet (MetaMask, Coinbase...).
-  // This is a plain injected-wallet transfer, not the agent's server wallet.
-  // (The installed @reown/walletkit is wallet-side — for building a wallet app.
-  //  Dapp-side QR connect would need @reown/appkit + a cloud.reown.com project ID.)
-  async function fund() {
-    setFunding(true);
-    setFundError(null);
-    setTxHash(null);
-    try {
-      const eth = (window as any).ethereum;
-      if (!eth) throw new Error("No browser wallet found. Install MetaMask or Coinbase Wallet.");
-      const accounts: string[] = await eth.request({ method: "eth_requestAccounts" });
-      if (!accounts?.[0]) throw new Error("No account connected.");
-      // Ensure Base Sepolia (84532 = 0x14a34)
-      try {
-        await eth.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: "0x14a34" }],
-        });
-      } catch (switchErr: any) {
-        if (switchErr?.code === 4902) {
-          await eth.request({
-            method: "wallet_addEthereumChain",
-            params: [{
-              chainId: "0x14a34",
-              chainName: "Base Sepolia",
-              nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
-              rpcUrls: ["https://sepolia.base.org"],
-              blockExplorerUrls: ["https://sepolia.basescan.org"],
-            }],
-          });
-        } else throw switchErr;
-      }
-      const hash: string = await eth.request({
-        method: "eth_sendTransaction",
-        params: [{ from: accounts[0], to: address, value: "0x38d7ea4c68000" }], // 0.001 ETH
+// Send 0.001 ETH on Base Sepolia from the user's browser wallet to `to`.
+// Plain injected-wallet transfer (MetaMask/Coinbase), no extra deps.
+async function sendFundTx(to: string): Promise<string> {
+  const eth = (window as any).ethereum;
+  if (!eth) throw new Error("No browser wallet found. Install MetaMask or Coinbase Wallet.");
+  const accounts: string[] = await eth.request({ method: "eth_requestAccounts" });
+  if (!accounts?.[0]) throw new Error("No account connected.");
+  // Ensure Base Sepolia (84532 = 0x14a34)
+  try {
+    await eth.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: "0x14a34" }],
+    });
+  } catch (switchErr: any) {
+    if (switchErr?.code === 4902) {
+      await eth.request({
+        method: "wallet_addEthereumChain",
+        params: [{
+          chainId: "0x14a34",
+          chainName: "Base Sepolia",
+          nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+          rpcUrls: ["https://sepolia.base.org"],
+          blockExplorerUrls: ["https://sepolia.basescan.org"],
+        }],
       });
-      setTxHash(hash);
-      setTimeout(onRefresh, 8000); // balance indexes after a few seconds
-    } catch (err) {
-      setFundError(err instanceof Error ? err.message : String(err));
-    }
-    setFunding(false);
+    } else throw switchErr;
   }
-
-  return (
-    <div className="flex flex-col gap-2 border bg-background p-3">
-      <div className="flex items-center justify-between gap-2">
-        <Badge className="font-mono uppercase">Agent · pays for APIs</Badge>
-        <Button variant="ghost" size="icon-xs" onClick={onRefresh} aria-label="Refresh agent balance">
-          <RefreshCw />
-        </Button>
-      </div>
-      <div className="flex items-center justify-between gap-2">
-        <code title={address} className="font-mono text-sm font-semibold text-primary">
-          {shortAddr(address)}
-        </code>
-        <CopyButton text={address} label="Copy agent address" />
-      </div>
-      <p className="text-2xl font-bold tracking-tight">{wallet.balance}</p>
-      <div className="flex flex-wrap gap-2 border-t pt-3">
-        <Button size="sm" className="font-mono text-xs uppercase" onClick={fund} disabled={funding}>
-          {funding ? "Funding…" : "Fund 0.001 ETH"}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="font-mono text-xs uppercase"
-          render={<a href={`https://sepolia.basescan.org/address/${address}`} target="_blank" rel="noreferrer" />}
-        >
-          Explorer <ExternalLink className="size-3" />
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="font-mono text-xs uppercase"
-          render={<a href="https://docs.base.org/base-chain/tools/network-faucets" target="_blank" rel="noreferrer" />}
-        >
-          Faucet <ExternalLink className="size-3" />
-        </Button>
-      </div>
-      {txHash && (
-        <a className="font-mono text-xs text-primary underline underline-offset-4" href={`https://sepolia.basescan.org/tx/${txHash}`} target="_blank" rel="noreferrer">
-          Funded {shortAddr(txHash)} — view on explorer
-        </a>
-      )}
-      {fundError && <p className="font-mono text-xs text-destructive">{fundError}</p>}
-    </div>
-  );
+  return eth.request({
+    method: "eth_sendTransaction",
+    params: [{ from: accounts[0], to, value: "0x38d7ea4c68000" }], // 0.001 ETH
+  });
 }
 
 function ToolCall({ step }: { step: Step }) {

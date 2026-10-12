@@ -185,15 +185,9 @@ Restart `npm run dev` after changing any value in `.env`.
 
 ## The Agent Wallet
 
-The agent owns a server wallet that signs paid API calls by itself. It is auto-created on first load and saved to `.agent-wallet.json`. The file is listed in `.gitignore`, so it is never committed.
+The agent owns a server wallet that signs paid API calls by itself. It is auto-created on first load and on every chat request, and saved to `.agent-wallet.json`. The file is listed in `.gitignore`, so it is never committed. The agent wallet is intentionally not shown in the UI — it just works in the background.
 
-The Setup panel shows *your* connected browser wallet (address + balance + disconnect). Below it, the agent wallet card shows:
-
-1. The agent address, with a button to copy it.
-2. The current ETH balance on Base Sepolia (chain 84532), with a refresh button. Balances are read via `https://sepolia.base.org` (pinned RPC in `agent/wallet.ts`).
-3. A link to view the wallet on the Base Sepolia block explorer.
-4. A link to faucets where you can request free test ETH.
-5. A **Fund 0.001 ETH** button that sends test ETH from your connected wallet to the agent (auto-switches to Base Sepolia, shows the tx hash on Basescan).
+The Setup panel shows only *your* connected browser wallet (address + balance + disconnect), plus a **Fund agent 0.001 ETH** button that sends test ETH from your wallet to the agent (auto-switches to Base Sepolia, shows the tx hash on Basescan).
 
 > WalletConnect note: the repo has `@reown/walletkit` installed but it is not wired up — it is wallet-side (for building a wallet app). The Fund button uses plain injected-wallet calls (`window.ethereum`), no extra setup. Full QR-based WalletConnect would need `@reown/appkit` + a `cloud.reown.com` project ID.
 
