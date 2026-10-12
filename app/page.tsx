@@ -182,20 +182,22 @@ export default function Home() {
                   </div>
                 )}
                 {connected && (
-                  <div className="flex flex-col gap-3 border bg-background p-3">
-                    <code className="truncate font-mono text-xs text-primary">{connected}</code>
-                    <div className="flex items-center justify-between font-mono text-xs text-muted-foreground uppercase">
-                      <span>
-                        Balance <span className="text-foreground">{connBalance ?? "..."}</span>
-                      </span>
-                      <Button variant="ghost" size="icon-xs" onClick={disconnect} aria-label="Disconnect">
+                  <div className="flex flex-col gap-2 border border-primary/40 bg-background p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <Badge variant="secondary" className="font-mono uppercase">
+                        You · Base Sepolia
+                      </Badge>
+                      <Button variant="ghost" size="sm" className="h-6 px-2 font-mono text-xs uppercase" onClick={disconnect}>
                         Disconnect
                       </Button>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      Base Sepolia (chain 84532). Agent signs paid APIs with its own server wallet
-                      {wallet?.address ? ` (${wallet.address.slice(0, 10)}...)` : ""} in the background.
-                    </p>
+                    <div className="flex items-center justify-between gap-2">
+                      <code title={connected} className="font-mono text-sm font-semibold text-primary">
+                        {shortAddr(connected)}
+                      </code>
+                      <CopyButton text={connected} label="Copy your address" />
+                    </div>
+                    <p className="text-2xl font-bold tracking-tight">{connBalance ?? "…"}</p>
                   </div>
                 )}
                 {wallet?.address && <WalletDetails wallet={wallet} onRefresh={loadWallet} />}
@@ -341,6 +343,28 @@ function Code({ children }: { children: React.ReactNode }) {
   return <code className="bg-muted px-1 py-0.5 font-mono text-[0.85em] text-foreground">{children}</code>;
 }
 
+function shortAddr(a: string) {
+  return `${a.slice(0, 6)}…${a.slice(-4)}`;
+}
+
+function CopyButton({ text, label }: { text: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      aria-label={label}
+      onClick={() => {
+        navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+    >
+      {copied ? <Check /> : <Copy />}
+    </Button>
+  );
+}
+
 function SetupStep(props: { number: number; title: string; done: boolean; last?: boolean; children: React.ReactNode }) {
   return (
     <div className="flex gap-4">
@@ -364,17 +388,10 @@ function SetupStep(props: { number: number; title: string; done: boolean; last?:
 }
 
 function WalletDetails({ wallet, onRefresh }: { wallet: WalletInfo; onRefresh: () => void }) {
-  const [copied, setCopied] = useState(false);
   const [funding, setFunding] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [fundError, setFundError] = useState<string | null>(null);
   const address = wallet.address!;
-
-  function copy() {
-    navigator.clipboard.writeText(address);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  }
 
   // Fund the agent from the USER's own browser wallet (MetaMask, Coinbase...).
   // This is a plain injected-wallet transfer, not the agent's server wallet.
@@ -422,39 +439,47 @@ function WalletDetails({ wallet, onRefresh }: { wallet: WalletInfo; onRefresh: (
   }
 
   return (
-    <div className="flex flex-col gap-3 border bg-background p-3">
+    <div className="flex flex-col gap-2 border bg-background p-3">
       <div className="flex items-center justify-between gap-2">
-        <code className="truncate font-mono text-xs text-primary">{address}</code>
-        <Button variant="ghost" size="icon-xs" onClick={copy} aria-label="Copy address">
-          {copied ? <Check /> : <Copy />}
-        </Button>
-      </div>
-      <div className="flex items-center justify-between font-mono text-xs text-muted-foreground uppercase">
-        <span>
-          Balance <span className="text-foreground">{wallet.balance}</span>
-        </span>
-        <Button variant="ghost" size="icon-xs" onClick={onRefresh} aria-label="Refresh balance">
+        <Badge className="font-mono uppercase">Agent · pays for APIs</Badge>
+        <Button variant="ghost" size="icon-xs" onClick={onRefresh} aria-label="Refresh agent balance">
           <RefreshCw />
         </Button>
       </div>
-      <div className="flex flex-wrap gap-x-4 gap-y-1 border-t pt-3 font-mono text-xs uppercase">
-        <a className="inline-flex items-center gap-1 hover:text-primary" href={`https://sepolia.basescan.org/address/${address}`} target="_blank" rel="noreferrer">
+      <div className="flex items-center justify-between gap-2">
+        <code title={address} className="font-mono text-sm font-semibold text-primary">
+          {shortAddr(address)}
+        </code>
+        <CopyButton text={address} label="Copy agent address" />
+      </div>
+      <p className="text-2xl font-bold tracking-tight">{wallet.balance}</p>
+      <div className="flex flex-wrap gap-2 border-t pt-3">
+        <Button size="sm" className="font-mono text-xs uppercase" onClick={fund} disabled={funding}>
+          {funding ? "Funding…" : "Fund 0.001 ETH"}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="font-mono text-xs uppercase"
+          render={<a href={`https://sepolia.basescan.org/address/${address}`} target="_blank" rel="noreferrer" />}
+        >
           Explorer <ExternalLink className="size-3" />
-        </a>
-        <a className="inline-flex items-center gap-1 hover:text-primary" href="https://docs.base.org/base-chain/tools/network-faucets" target="_blank" rel="noreferrer">
-          Get test ETH <ExternalLink className="size-3" />
-        </a>
-        <button onClick={fund} disabled={funding} className="inline-flex cursor-pointer items-center gap-1 hover:text-primary disabled:opacity-50">
-          {funding ? "Funding..." : "Fund 0.001 ETH"}
-        </button>
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="font-mono text-xs uppercase"
+          render={<a href="https://docs.base.org/base-chain/tools/network-faucets" target="_blank" rel="noreferrer" />}
+        >
+          Faucet <ExternalLink className="size-3" />
+        </Button>
       </div>
       {txHash && (
         <a className="font-mono text-xs text-primary underline underline-offset-4" href={`https://sepolia.basescan.org/tx/${txHash}`} target="_blank" rel="noreferrer">
-          Funded: {txHash.slice(0, 10)}... — view on explorer
+          Funded {shortAddr(txHash)} — view on explorer
         </a>
       )}
       {fundError && <p className="font-mono text-xs text-destructive">{fundError}</p>}
-      <p className="text-xs text-muted-foreground">Base Sepolia testnet (chain 84532). Saved in .agent-wallet.json.</p>
     </div>
   );
 }
