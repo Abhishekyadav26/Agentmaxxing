@@ -294,12 +294,60 @@ function SetupStep(props: { number: number; title: string; done: boolean; last?:
 
 function WalletDetails({ wallet, onRefresh }: { wallet: WalletInfo; onRefresh: () => void }) {
   const [copied, setCopied] = useState(false);
+  const [funding, setFunding] = useState(false);
+  const [txHash, setTxHash] = useState<string | null>(null);
+  const [fundError, setFundError] = useState<string | null>(null);
   const address = wallet.address!;
 
   function copy() {
     navigator.clipboard.writeText(address);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
+  }
+
+  // Fund the agent from the USER's own browser wallet (MetaMask, Coinbase...).
+  // This is a plain injected-wallet transfer, not the agent's server wallet.
+  // (The installed @reown/walletkit is wallet-side — for building a wallet app.
+  //  Dapp-side QR connect would need @reown/appkit + a cloud.reown.com project ID.)
+  async function fund() {
+    setFunding(true);
+    setFundError(null);
+    setTxHash(null);
+    try {
+      const eth = (window as any).ethereum;
+      if (!eth) throw new Error("No browser wallet found. Install MetaMask or Coinbase Wallet.");
+      const accounts: string[] = await eth.request({ method: "eth_requestAccounts" });
+      if (!accounts?.[0]) throw new Error("No account connected.");
+      // Ensure Base Sepolia (84532 = 0x14a34)
+      try {
+        await eth.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: "0x14a34" }],
+        });
+      } catch (switchErr: any) {
+        if (switchErr?.code === 4902) {
+          await eth.request({
+            method: "wallet_addEthereumChain",
+            params: [{
+              chainId: "0x14a34",
+              chainName: "Base Sepolia",
+              nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+              rpcUrls: ["https://sepolia.base.org"],
+              blockExplorerUrls: ["https://sepolia.basescan.org"],
+            }],
+          });
+        } else throw switchErr;
+      }
+      const hash: string = await eth.request({
+        method: "eth_sendTransaction",
+        params: [{ from: accounts[0], to: address, value: "0x38d7ea4c68000" }], // 0.001 ETH
+      });
+      setTxHash(hash);
+      setTimeout(onRefresh, 8000); // balance indexes after a few seconds
+    } catch (err) {
+      setFundError(err instanceof Error ? err.message : String(err));
+    }
+    setFunding(false);
   }
 
   return (
@@ -325,7 +373,16 @@ function WalletDetails({ wallet, onRefresh }: { wallet: WalletInfo; onRefresh: (
         <a className="inline-flex items-center gap-1 hover:text-primary" href="https://docs.base.org/base-chain/tools/network-faucets" target="_blank" rel="noreferrer">
           Get test ETH <ExternalLink className="size-3" />
         </a>
+        <button onClick={fund} disabled={funding} className="inline-flex cursor-pointer items-center gap-1 hover:text-primary disabled:opacity-50">
+          {funding ? "Funding..." : "Fund 0.001 ETH"}
+        </button>
       </div>
+      {txHash && (
+        <a className="font-mono text-xs text-primary underline underline-offset-4" href={`https://sepolia.basescan.org/tx/${txHash}`} target="_blank" rel="noreferrer">
+          Funded: {txHash.slice(0, 10)}... — view on explorer
+        </a>
+      )}
+      {fundError && <p className="font-mono text-xs text-destructive">{fundError}</p>}
       <p className="text-xs text-muted-foreground">Base Sepolia testnet. Saved in .agent-wallet.json.</p>
     </div>
   );
