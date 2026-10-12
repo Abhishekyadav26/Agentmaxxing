@@ -58,6 +58,8 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. The Setup p
 
 Click **Create wallet**. The agent now has its own wallet, which it uses to sign payments for paid APIs. The wallet is saved in `.agent-wallet.json` in your project folder, so it stays the same after a restart.
 
+To give the agent test ETH, click **Fund 0.001 ETH** under the wallet address. This connects *your* browser wallet (MetaMask/Coinbase), switches it to Base Sepolia (chain 84532), and sends 0.001 ETH to the agent. Your wallet and the agent's server wallet stay separate.
+
 ### Step 6. Talk to your agent
 
 Try one of these prompts:
@@ -188,9 +190,12 @@ Clicking **Create wallet** generates a new private key and saves it to `.agent-w
 Once the wallet exists, the Setup panel shows:
 
 1. The wallet address, with a button to copy it.
-2. The current ETH balance on Base Sepolia, with a refresh button.
+2. The current ETH balance on Base Sepolia (chain 84532), with a refresh button. Balances are read via `https://sepolia.base.org` (pinned RPC in `agent/wallet.ts`).
 3. A link to view the wallet on the Base Sepolia block explorer.
 4. A link to faucets where you can request free test ETH.
+5. A **Fund 0.001 ETH** button that sends test ETH from your own browser wallet to the agent (auto-switches to Base Sepolia, shows the tx hash on Basescan).
+
+> WalletConnect note: the repo has `@reown/walletkit` installed but it is not wired up — it is wallet-side (for building a wallet app). The Fund button uses plain injected-wallet calls (`window.ethereum`), no extra setup. Full QR-based WalletConnect would need `@reown/appkit` + a `cloud.reown.com` project ID.
 
 To start again with a new wallet, stop the server, delete `.agent-wallet.json`, restart, and click **Create wallet** again.
 
@@ -204,7 +209,7 @@ To use a wallet you already have, set `WALLET_PRIVATE_KEY` in `.env` instead.
 | :--- | :--- |
 | The page says to add `GEMINI_API_KEY` | Add your key to `.env` and restart `npm run dev`. |
 | The agent never uses my new tool | Make the `description` more specific about when the tool should be used, then restart the server. |
-| The weather tool fails with "no wallet yet" | Click **Create wallet** in the Setup panel, then ask again. |
+| The weather tool fails with "no wallet yet" | Click **Create wallet** in the Setup panel, then ask again. On Vercel, set `WALLET_PRIVATE_KEY` instead (files don't persist on serverless) and redeploy. |
 | Port 3000 is already in use | Run `npm run dev -- -p 3001` and open that port instead. |
 | A model error appears in the chat | Check that your API key is valid, or set a different model in `GEMINI_MODEL`. `gemini-flash-latest` currently 503s — use `gemini-flash-lite-latest` or `gemini-3.8-flash` instead. |
 | `get_country_info` returns "not iterable" | `restcountries.com/v3.1` is deprecated. This repo already uses countriesnow + World Bank instead. |
